@@ -7,7 +7,9 @@ import {
   LoaderCircle,
   CircleCheck,
   TriangleAlert,
+  Lock,
 } from 'lucide-react';
+import { useAuth } from '@clerk/nextjs';
 import { cn } from '@/lib/utils';
 
 type Status = 'idle' | 'uploading' | 'success' | 'error';
@@ -24,6 +26,8 @@ function formatSize(bytes: number) {
 }
 
 const FileUploadComponent: React.FC = () => {
+  const { isLoaded, isSignedIn } = useAuth();
+
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [status, setStatus] = React.useState<Status>('idle');
   const [error, setError] = React.useState<string>('');
@@ -31,6 +35,8 @@ const FileUploadComponent: React.FC = () => {
   const [files, setFiles] = React.useState<UploadedFile[]>([]);
 
   const uploadFile = async (file: File) => {
+    if (!isSignedIn) return;
+
     if (file.type !== 'application/pdf') {
       setStatus('error');
       setError('Only PDF files are supported.');
@@ -67,6 +73,10 @@ const FileUploadComponent: React.FC = () => {
   };
 
   const isUploading = status === 'uploading';
+  const isLocked = isLoaded && !isSignedIn;
+  // Stay disabled while auth resolves so the zone is never briefly clickable
+  // for a signed-out visitor.
+  const isDisabled = isUploading || !isLoaded || isLocked;
 
   return (
     <div className="flex flex-col gap-4">
@@ -79,42 +89,52 @@ const FileUploadComponent: React.FC = () => {
 
       <div
         role="button"
-        tabIndex={0}
-        aria-disabled={isUploading}
-        onClick={() => !isUploading && inputRef.current?.click()}
+        tabIndex={isDisabled ? -1 : 0}
+        aria-disabled={isDisabled}
+        onClick={() => !isDisabled && inputRef.current?.click()}
         onKeyDown={(ev) => {
-          if ((ev.key === 'Enter' || ev.key === ' ') && !isUploading) {
+          if ((ev.key === 'Enter' || ev.key === ' ') && !isDisabled) {
             ev.preventDefault();
             inputRef.current?.click();
           }
         }}
         onDragOver={(ev) => {
           ev.preventDefault();
-          setIsDragging(true);
+          if (!isDisabled) setIsDragging(true);
         }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
         className={cn(
-          'flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-background px-4 py-8 text-center transition-colors',
-          'hover:border-ring/60 hover:bg-muted/50',
+          'flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-background px-4 py-8 text-center transition-colors',
+          isDisabled
+            ? 'cursor-not-allowed opacity-60'
+            : 'cursor-pointer hover:border-ring/60 hover:bg-muted/50',
           'focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
-          isDragging && 'border-ring bg-muted',
-          isUploading && 'pointer-events-none opacity-60'
+          isDragging && !isDisabled && 'border-ring bg-muted',
+          isUploading && 'pointer-events-none'
         )}
       >
         <div className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
           {isUploading ? (
             <LoaderCircle className="size-5 animate-spin" />
+          ) : isLocked ? (
+            <Lock className="size-5" />
           ) : (
             <Upload className="size-5" />
           )}
         </div>
         <div>
           <p className="text-sm font-medium">
-            {isUploading ? 'Uploading…' : 'Upload PDF file'}
+            {isUploading
+              ? 'Uploading…'
+              : isLocked
+                ? 'Sign in to upload'
+                : 'Upload PDF file'}
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Drag and drop, or click to browse
+            {isLocked
+              ? 'You need an account to add documents'
+              : 'Drag and drop, or click to browse'}
           </p>
         </div>
       </div>

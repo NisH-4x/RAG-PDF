@@ -10,7 +10,9 @@ import {
   FileText,
   ChevronDown,
   TriangleAlert,
+  Lock,
 } from 'lucide-react';
+import { useAuth, SignInButton } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -146,6 +148,8 @@ function Sources({ documents }: { documents: Doc[] }) {
 }
 
 const ChatComponent: React.FC = () => {
+  const { isLoaded, isSignedIn } = useAuth();
+
   const [message, setMessage] = React.useState<string>('');
   const [messages, setMessages] = React.useState<IMessage[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -167,7 +171,7 @@ const ChatComponent: React.FC = () => {
 
   const sendMessage = async (text: string) => {
     const query = text.trim();
-    if (!query || isLoading) return;
+    if (!query || isLoading || !isSignedIn) return;
 
     setMessages((prev) => [...prev, { role: 'user', content: query }]);
     setMessage('');
@@ -227,17 +231,19 @@ const ChatComponent: React.FC = () => {
                 Upload a document on the left, then ask a question. Answers cite
                 the pages they came from.
               </p>
-              <div className="mt-6 flex flex-wrap justify-center gap-2">
-                {SUGGESTIONS.map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    onClick={() => sendMessage(suggestion)}
-                    className="cursor-pointer rounded-full border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  >
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
+              {isSignedIn && (
+                <div className="mt-6 flex flex-wrap justify-center gap-2">
+                  {SUGGESTIONS.map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      onClick={() => sendMessage(suggestion)}
+                      className="cursor-pointer rounded-full border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex flex-col gap-5">
@@ -307,38 +313,61 @@ const ChatComponent: React.FC = () => {
 
       <div className="shrink-0 border-t bg-background">
         <div className="mx-auto w-full max-w-3xl px-4 py-3">
-          <div className="flex items-end gap-2 rounded-2xl border bg-background p-1.5 pl-3 transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
-            <textarea
-              ref={textareaRef}
-              rows={1}
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  sendMessage(message);
-                }
-              }}
-              placeholder="Ask a question about your PDF…"
-              className="max-h-40 min-h-8 flex-1 resize-none bg-transparent py-1.5 text-sm outline-none placeholder:text-muted-foreground"
-            />
-            <Button
-              size="icon"
-              onClick={() => sendMessage(message)}
-              disabled={!message.trim() || isLoading}
-              aria-label="Send message"
-              className="rounded-xl"
-            >
-              {isLoading ? (
-                <LoaderCircle className="animate-spin" />
-              ) : (
-                <Send />
-              )}
-            </Button>
-          </div>
-          <p className="mt-1.5 text-center text-[11px] text-muted-foreground">
-            Enter to send · Shift + Enter for a new line
-          </p>
+          {!isLoaded ? (
+            // Auth state is still resolving — render a neutral placeholder so
+            // neither the composer nor the sign-in prompt flashes incorrectly.
+            <div className="h-[46px] animate-pulse rounded-2xl border bg-muted/40" />
+          ) : !isSignedIn ? (
+            <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed px-4 py-6 text-center">
+              <div className="flex size-9 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <Lock className="size-4" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Sign in to ask questions</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  You need an account to chat with your documents.
+                </p>
+              </div>
+              <SignInButton>
+                <Button size="lg">Sign in</Button>
+              </SignInButton>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-end gap-2 rounded-2xl border bg-background p-1.5 pl-3 transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
+                <textarea
+                  ref={textareaRef}
+                  rows={1}
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      sendMessage(message);
+                    }
+                  }}
+                  placeholder="Ask a question about your PDF…"
+                  className="max-h-40 min-h-8 flex-1 resize-none bg-transparent py-1.5 text-sm outline-none placeholder:text-muted-foreground"
+                />
+                <Button
+                  size="icon"
+                  onClick={() => sendMessage(message)}
+                  disabled={!message.trim() || isLoading}
+                  aria-label="Send message"
+                  className="rounded-xl"
+                >
+                  {isLoading ? (
+                    <LoaderCircle className="animate-spin" />
+                  ) : (
+                    <Send />
+                  )}
+                </Button>
+              </div>
+              <p className="mt-1.5 text-center text-[11px] text-muted-foreground">
+                Enter to send · Shift + Enter for a new line
+              </p>
+            </>
+          )}
         </div>
       </div>
     </div>
