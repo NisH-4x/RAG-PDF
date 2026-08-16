@@ -25,6 +25,7 @@
     "ioredis": "^5.11.1",
     "multer": "^2.2.0",
     "npm": "^11.19.0",
+    "openai": "^7.4.0",
     "pdf-parse": "^2.4.5"
   },
   "devDependencies": {
